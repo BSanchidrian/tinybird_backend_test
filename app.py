@@ -52,20 +52,45 @@ class DataReceiverHandler(tornado.web.RequestHandler):
 
 
 def run():
+    port = 8888
+    address = '0.0.0.0'
+    debug = bool(sys.flags.debug)
+    processes = 8
+    run_multiple_processes(port, address, processes, debug)
+
+    print(f"server listening at {address}:{port} debug={debug}")
+
+def run_multiple_processes(port, address, processes, debug):
+    sockets = tornado.netutil.bind_sockets(port, address)
+    tornado.process.fork_processes(processes)
+
+    application = create_application(debug)
+    server = tornado.httpserver.HTTPServer(application)
+    server.add_sockets(sockets)
+
+    print(f"server listening at {address}:{port} debug={debug}")
+
+    tornado.ioloop.IOLoop.current().start()
+
+def run_single_thread(port, address, debug):
+    application = create_application(debug)
+    application.listen(port, address)
+    
+    print(f"server listening at {address}:{port} debug={debug}")
+
+    tornado.ioloop.IOLoop.current().start()
+
+def create_application(debug):
     handlers = [
         (r"/", DataReceiverHandler),
     ]
-    debug = bool(sys.flags.debug)
     settings = {
         'debug': debug
     }
-    port = 8888
-    address = '0.0.0.0'
+    
     application = tornado.web.Application(handlers, **settings)
-    application.listen(port, address)
-    print(f"server listening at {address}:{port} debug={debug}")
-    tornado.ioloop.IOLoop.current().start()
-
+    return application
 
 if __name__ == "__main__":
-    run()
+    debug = bool(sys.flags.debug)
+    run_single_thread(8888, '0.0.0.0', debug)
