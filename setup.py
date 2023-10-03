@@ -10,6 +10,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         'tornado==6.1',
+        'line_profiler'
     ],
     entry_points={
         'console_scripts': [
