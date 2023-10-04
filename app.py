@@ -5,12 +5,9 @@ import sys
 import tornado.ioloop
 import tornado.web
 
-from line_profiler import profile
-
 from datetime import date
 
 class CsvWriter():
-    @profile
     def write_csv(self, request_body, csv_name):
         records_valid = 0
         records_invalid = 0
@@ -46,7 +43,6 @@ class CsvWriter():
         return records_valid, records_invalid
     
     # Leaving this here at purpose for profiling. Currently using the version above.
-    @profile
     def write_csv_old(self, request_body, csv_name):
         records_valid = 0
         records_invalid = 0
@@ -79,7 +75,7 @@ class DataReceiverHandler(tornado.web.RequestHandler):
         self.request_body += chunk
 
     def post(self):
-        records_valid, records_invalid = self.csv_writer.write_csv(self.request_body, f"csv/nyc_taxi-{date.today()}.csv")
+        records_valid, records_invalid = self.csv_writer.write_csv(self.request_body, f"./csv/nyc_taxi-{date.today()}.csv")
         result = {
             'result': {
                 'status': 'ok',
@@ -95,12 +91,11 @@ class DataReceiverHandler(tornado.web.RequestHandler):
         }
         self.write(result)
 
-
 def run():
     port = 8888
     address = '0.0.0.0'
     debug = bool(sys.flags.debug)
-    processes = 8
+    processes = 4
     run_multiple_processes(port, address, processes, debug)
 
     print(f"server listening at {address}:{port} debug={debug}")

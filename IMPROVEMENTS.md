@@ -167,3 +167,29 @@ Taking into account only the code changes I had time to implement, the final per
 This is the final performance obtained in a single machine with 8 cores.
 
 There are more things we could do in order to help reducing this number even more. For example executing the application in multiple instances under a load balancer. In that way we scale the amount of cores and processing power and the load balancer helps distributing the load evenly to all instances resulting in more requests being handled per second.
+
+---
+
+## Nginx Load Balancer
+
+For the sake of curiosity I wanted to give it a try to see how it behaves when using multiple instances behind a load balancer. I'm using Docker for this. I know I won't see any big improvement because at the end Docker is running in the same host where I spawned multiple processes to run the previous benchmarks, but let's try...
+
+After "Dockerizing" the application (see [Dockerfile](Dockerfile)), writing a simple [docker-compose file](docker-compose.yml) and some nginx configuration, I can run it using:
+
+```bash
+docker compose up --build -d --scale tiny=4
+```
+
+To spin up 4 instances of the application (remember that each instance spawns multiple processes)
+
+I've been playing around for a while with different nginx configurations, processes spawned, cpu limit per instance, etc. And the best benchmark results I got were pretty similar to the best ones we already had, so I cannot see any noticiable improvement.
+
+![Benchmarks docker](images/benchmark_docker.png)
+
+## Supervisord
+
+Just briefly annotate that before using the `docker compose --scale` approach I tried to use `supervisord`, I configured everything and made it work spawning different processes of `tiny_data_server`, created an upstream in nginx and tried to proxy requests to those services, but I had lots of issues with the `supervisord` Dockerfile I wrote and decided to delete it all and move into the approach from above.
+
+I later learned that all the issues I was having were because of the base image I decided to use (ubuntu:23.04) and some changes they implemented related to how python packages are installed.
+
+I'm leaving the supervisor config files at purpose to revisit this whenever I've some time.
