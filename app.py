@@ -8,7 +8,7 @@ import tornado.web
 from datetime import date
 
 class CsvWriter():
-    def write_csv(self, request_body, csv_name):
+    def write_csv(self, decoded_body, csv_name):
         records_valid = 0
         records_invalid = 0
         max_rows = 100
@@ -20,8 +20,6 @@ class CsvWriter():
                 'total_amount',
             ]
             writer = csv.DictWriter(fw, fieldnames, extrasaction='ignore')
-            # I'm basically decoding the byte array, spliting by '\n' and removing the last empty entry which is ''
-            decoded_body = [line for line in request_body.decode('utf-8').split('\n') if line]
             rows = []
 
             for record in decoded_body:
@@ -69,22 +67,44 @@ class CsvWriter():
 class DataReceiverHandler(tornado.web.RequestHandler):
     def initialize(self):
         self.csv_writer = CsvWriter()
-        self.request_body = b''
+        self.request_body = ''
+        self.total_size = 0
+        self.records_valid = 0
+        self.records_invalid = 0
+        self.csv_file_path = f"./csv/nyc_taxi-{date.today()}.csv"
+        self.buffer_size = 1024 * 4 # 4kb buffer
 
-    def data_received(self, chunk):
-        self.request_body += chunk
+    async def data_received(self, chunk):
+        self.request_body += chunk.decode('utf-8')
+        self.total_size += len(chunk)
 
-    def post(self):
-        records_valid, records_invalid = self.csv_writer.write_csv(self.request_body, f"./csv/nyc_taxi-{date.today()}.csv")
+        if len(self.request_body) >= self.buffer_size:
+            decoded_body = [line for line in self.request_body.split('\n') if line]
+            if decoded_body[-1].endswith('}'):
+                self.request_body = ''
+            else:
+                self.request_body = decoded_body.pop()
+
+            valid, invalid = self.csv_writer.write_csv(decoded_body, self.csv_file_path)
+            self.records_valid += valid
+            self.records_invalid += invalid
+
+    async def post(self):
+        if self.request_body:
+            decoded_body = [line for line in self.request_body.split('\n') if line]
+            valid, invalid = self.csv_writer.write_csv(decoded_body, self.csv_file_path)
+            self.records_valid += valid
+            self.records_invalid += invalid
+
         result = {
             'result': {
                 'status': 'ok',
                 'stats': {
-                    'bytes': len(self.request_body),
+                    'bytes': self.total_size,
                     'records': {
-                        'valid': records_valid,
-                        'invalid': records_invalid,
-                        'total': records_valid + records_invalid,
+                        'valid': self.records_valid,
+                        'invalid': self.records_invalid,
+                        'total': self.records_valid + self.records_invalid,
                     },
                 }
             }
@@ -95,7 +115,7 @@ def run():
     port = 8888
     address = '0.0.0.0'
     debug = bool(sys.flags.debug)
-    processes = 4
+    processes = 8
     run_multiple_processes(port, address, processes, debug)
 
     print(f"server listening at {address}:{port} debug={debug}")
@@ -105,7 +125,7 @@ def run_multiple_processes(port, address, processes, debug):
     tornado.process.fork_processes(processes)
 
     application = create_application(debug)
-    server = tornado.httpserver.HTTPServer(application)
+    server = tornado.httpserver.HTTPServer(application, max_buffer_size=100 * 1024 * 1024 * 1024)  # 100G
     server.add_sockets(sockets)
 
     print(f"server listening at {address}:{port} debug={debug}")
@@ -114,7 +134,8 @@ def run_multiple_processes(port, address, processes, debug):
 
 def run_single_thread(port, address, debug):
     application = create_application(debug)
-    application.listen(port, address)
+    server = tornado.httpserver.HTTPServer(application, max_buffer_size=100 * 1024 * 1024 * 1024)  # 100G
+    server.listen(port, address)
     
     print(f"server listening at {address}:{port} debug={debug}")
 
